@@ -28,5 +28,10 @@ export function createProductRepository(db: Database): ProductRepository {
       const rows = await db.select().from(products).where(inArray(products.sku, normalized));
       return rows.map(toProduct);
     },
+
+    async findAllActive() {
+      const rows = await db.select().from(products).where(eq(products.isActive, true)).orderBy(products.sku);
+      return rows.map(toProduct);
+    },
   };
 }

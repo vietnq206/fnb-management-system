@@ -11,6 +11,7 @@ function toEmployee(row: typeof employees.$inferSelect): Employee {
     name: row.name,
     storeId: row.storeId,
     position: row.position,
+    role: row.role,
     status: row.status as Employee["status"],
   };
 }

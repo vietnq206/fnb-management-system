@@ -1,5 +1,6 @@
-import { Client, GatewayIntentBits, REST, Routes, Events, type Interaction } from "discord.js";
+import { Client, GatewayIntentBits, REST, Routes, Events, MessageFlags, type Interaction } from "discord.js";
 import { inventoryCommandData, inventoryCommandName, inventoryModalCustomId, handleInventoryCommand } from "./commands/inventory-command.js";
+import { inventoryCheckCommandData, inventoryCheckCommandName, handleInventoryCheckCommand } from "./commands/inventory-check-command.js";
 import { handleInventoryModalSubmit } from "./interactions/inventory-modal-submit.js";
 import { handleInventoryButton, isInventoryButton } from "./interactions/inventory-confirm-button.js";
 import type { DiscordAdapterDeps } from "./dependencies.js";
@@ -12,7 +13,7 @@ export interface DiscordBotConfig {
 
 export async function registerCommands(config: DiscordBotConfig): Promise<void> {
   const rest = new REST().setToken(config.token);
-  const body = [inventoryCommandData.toJSON()];
+  const body = [inventoryCommandData.toJSON(), inventoryCheckCommandData.toJSON()];
 
   if (config.guildId) {
     await rest.put(Routes.applicationGuildCommands(config.clientId, config.guildId), { body });
@@ -31,7 +32,12 @@ export function createDiscordBot(config: DiscordBotConfig, deps: DiscordAdapterD
   client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     try {
       if (interaction.isChatInputCommand() && interaction.commandName === inventoryCommandName) {
-        await handleInventoryCommand(interaction);
+        await handleInventoryCommand(interaction, deps);
+        return;
+      }
+
+      if (interaction.isChatInputCommand() && interaction.commandName === inventoryCheckCommandName) {
+        await handleInventoryCheckCommand(interaction, deps);
         return;
       }
 
@@ -47,7 +53,9 @@ export function createDiscordBot(config: DiscordBotConfig, deps: DiscordAdapterD
     } catch (error) {
       console.error("Unhandled interaction error:", error);
       if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content: "Đã có lỗi xảy ra, vui lòng thử lại.", ephemeral: true }).catch(() => {});
+        await interaction
+          .reply({ content: "Đã có lỗi xảy ra, vui lòng thử lại.", flags: MessageFlags.Ephemeral })
+          .catch(() => {});
       }
     }
   });

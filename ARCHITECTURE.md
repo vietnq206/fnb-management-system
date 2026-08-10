@@ -204,6 +204,17 @@ Execute
 Audit log
 ```
 
+**Đã triển khai (08/2026):** 3 mức role — `staff` < `manager` < `admin` (rank cao hơn tự
+động bao gồm quyền của rank thấp hơn). Lưu ở cột `employees.role` (Postgres enum
+`employee_role`), tách biệt với `position` (chỉ là chức danh hiển thị, không dùng để
+phân quyền). Luật xếp hạng thuần túy nằm ở `core/employee/employee-role.ts`
+(`hasAtLeastRole`). Mỗi command Discord tự khai báo mức quyền tối thiểu của nó (ví dụ
+`inventoryCommandRequiredRole` trong file command tương ứng), và gọi
+`adapters/discord/authorize.ts#resolveAuthorizedEmployee` ngay đầu handler — hàm này làm
+đúng 2 bước "Discord permission check" (ngầm định, vì đã qua được `interaction`) rồi
+"Backend permission check" trong sơ đồ trên, trước khi chạm vào bất kỳ business logic
+nào. Audit log (bước cuối sơ đồ) **vẫn chưa có** — xem mục "Trạng thái triển khai".
+
 ## 8. Discord Server Structure
 
 ```
@@ -484,7 +495,7 @@ Telegram, Slack vẫn dùng lại được job này mà không sửa gì.
 
 Cập nhật thủ công mỗi khi có thay đổi lớn, để file này luôn phản ánh đúng những gì đã làm.
 
-### Đã có (Milestone 1)
+### Đã có (Milestone 1) — đã test end-to-end thành công 08/2026
 
 - Cấu trúc code hexagonal: `src/core`, `src/application`, `src/adapters/discord`,
   `src/infrastructure`.
@@ -497,11 +508,21 @@ Cập nhật thủ công mỗi khi có thay đổi lớn, để file này luôn 
 - Docker Compose (Postgres + app), Dockerfile, migration đầu tiên đã generate sẵn trong
   `drizzle/`.
 - Seed script mẫu: 5 sản phẩm (A1–B2) + 1 nhân viên mẫu map với Discord.
+- Môi trường dev thật: Docker Engine + Node.js (qua nvm) chạy native trong WSL2 Ubuntu,
+  Discord Application/Bot đã tạo, đã chạy `pnpm dev` và xác nhận thật trên Discord —
+  `/inventory-update` → preview → Confirm → transaction ghi vào Postgres thành công.
+- `/inventory-check [sku]` — lệnh chỉ đọc, xem tồn kho hiện tại của 1 SKU hoặc toàn bộ sản
+  phẩm đang active. Không ghi gì vào DB. Thêm `ProductRepository.findAllActive()` để phục
+  vụ trường hợp không truyền SKU.
+- Phân quyền 3 mức `staff < manager < admin` (mục 7). Cả `/inventory-update` và
+  `/inventory-check` hiện để mức tối thiểu `staff` (mở cho tất cả) — đổi 1 dòng hằng số
+  `xxxCommandRequiredRole` trong file command tương ứng nếu muốn giới hạn lại. Employee
+  mẫu EMP001 (map với Discord của bạn) được seed sẵn role `admin`.
 
 ### Chưa có (việc tiếp theo)
 
-- Lệnh Discord chỉ để **xem** tồn kho hiện tại (ví dụ `/inventory-check`) — hiện chỉ có
-  lệnh cập nhật.
+- Audit log (`audit_logs` table) — bước cuối trong sơ đồ permission ở mục 7 vẫn thiếu, nên
+  hiện chưa ghi lại "ai làm gì, lúc nào" một cách có cấu trúc.
 - Inventory reorder alert / background job (mục 24 ở trên) — cần thêm `lead_time_days`,
   `reorder_point` vào schema `products` trước.
 - REST API (`src/api` đang để trống).

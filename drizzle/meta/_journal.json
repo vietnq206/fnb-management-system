@@ -8,6 +8,13 @@
       "when": 1786208802401,
       "tag": "0000_futuristic_vision",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786379759155,
+      "tag": "0001_shocking_tarot",
+      "breakpoints": true
     }
   ]
 }
