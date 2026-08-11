@@ -32,6 +32,7 @@ export async function handleInventoryButton(interaction: ButtonInteraction, deps
     try {
       const transactions = await confirmInventoryUpdate(preview, "discord", {
         inventoryRepository: deps.inventoryRepository,
+        auditLogRepository: deps.auditLogRepository,
       });
       inventorySessionStore.delete(sessionId);
 

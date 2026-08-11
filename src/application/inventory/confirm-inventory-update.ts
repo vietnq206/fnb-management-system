@@ -1,9 +1,11 @@
 import type { InventoryRepository } from "../../core/inventory/inventory.repository.js";
 import type { NewInventoryTransaction, InventoryTransaction } from "../../core/inventory/inventory-transaction.entity.js";
+import type { AuditLogRepository } from "../../core/audit/audit-log.repository.js";
 import type { InventoryPreview } from "./types.js";
 
 export interface ConfirmInventoryUpdateDeps {
   inventoryRepository: InventoryRepository;
+  auditLogRepository: AuditLogRepository;
 }
 
 /**
@@ -30,5 +32,22 @@ export async function confirmInventoryUpdate(
     metadata: { rawLine: line.rawLine },
   }));
 
-  return deps.inventoryRepository.createTransactions(newTransactions);
+  const transactions = await deps.inventoryRepository.createTransactions(newTransactions);
+
+  await deps.auditLogRepository.record({
+    employeeId: preview.employeeId,
+    action: "INVENTORY_UPDATE_CONFIRMED",
+    entityType: "inventory_transaction",
+    payload: {
+      transactionIds: transactions.map((tx) => tx.id),
+      lines: preview.lines.map((line) => ({
+        sku: line.sku,
+        productId: line.productId,
+        quantityChange: line.quantityChange,
+      })),
+    },
+    source,
+  });
+
+  return transactions;
 }

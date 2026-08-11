@@ -4,8 +4,41 @@
 theo dõi bằng git, và cập nhật liên tục khi thiết kế thay đổi. Bản gốc `Architecture.docx`
 vẫn được giữ lại trong repo để tham chiếu, nhưng từ nay **file này là nguồn cập nhật chính**.
 
-> Cập nhật gần nhất: thêm mục 24 (Inventory Reorder Alerts — planned) và mục "Trạng thái
-> triển khai" sau khi thảo luận về tính năng cảnh báo đặt hàng định kỳ.
+> Cập nhật gần nhất: đọc lại toàn bộ file, thêm mục "Bắt đầu nhanh" và "Cấu trúc thư mục
+> hiện tại (thực tế)" để một phiên Claude/Claude Code mới có thể nắm bối cảnh chỉ bằng
+> cách đọc file này, không cần người dùng kể lại từ đầu.
+
+---
+
+## Bắt đầu nhanh (đọc mục này trước, dù bạn là người hay là Claude phiên mới)
+
+**Đây là project gì:** hệ thống quản lý nội bộ cho 1 doanh nghiệp nhỏ (F&B), dùng Discord
+làm giao diện/hub cho nhân viên ở giai đoạn đầu, nhưng business logic + dữ liệu thật nằm
+hoàn toàn trong backend riêng (TypeScript + PostgreSQL), theo kiến trúc Ports & Adapters —
+xem mục 1–5, 20, 22 để hiểu triết lý, đừng bỏ qua nếu chưa quen dự án.
+
+**Đang ở đâu:** đã xong Milestone 1 và Phase 2 gần trọn vẹn — `/inventory-update` và
+`/inventory-check` chạy thật trên Discord, có phân quyền 3 mức. Xem mục **"Trạng thái
+triển khai"** (cuối file) để biết chính xác cái gì đã có / chưa có trước khi bắt đầu làm
+thêm bất cứ gì — tránh làm trùng hoặc đoán sai hiện trạng.
+
+**Chạy project trên máy này thế nào:** môi trường dev là WSL2 Ubuntu (Docker Engine native
++ Node.js qua nvm + pnpm), project truy cập được qua `~/fnb-management-system` (symlink
+sang ổ Windows). Lệnh chạy nhanh:
+```bash
+cd ~/fnb-management-system
+docker compose up -d postgres   # nếu Postgres chưa chạy
+pnpm dev                        # chạy bot, tsx watch — Ctrl+C rồi chạy lại nếu vừa sửa
+                                 # code từ bên ngoài WSL2 (watch không nhận qua /mnt/c)
+```
+Đổi schema thì `pnpm db:generate && pnpm db:migrate`. Chi tiết đầy đủ + cách lấy Discord
+token/IDs xem `README.md`.
+
+**Nguyên tắc bất di bất dịch khi sửa/thêm code** (chi tiết ở mục 22): Discord chỉ là
+adapter, không chứa business logic; mọi thứ quan trọng ghi vào Postgres phải qua
+PARSE → VALIDATE → PREVIEW → HUMAN CONFIRM → DATABASE; `core/` không được import
+Discord.js hay Drizzle; mỗi command Discord phải gọi `resolveAuthorizedEmployee` (xem mục
+7) trước khi chạm business logic.
 
 ---
 
@@ -115,6 +148,11 @@ backup.**
 
 Theo tư tưởng Ports & Adapters / Hexagonal Architecture ở mức vừa phải.
 
+> Cây thư mục dưới đây là **định hướng ban đầu** (lúc chưa viết dòng code nào) — vẫn đúng
+> về nguyên tắc phân lớp, nhưng không phản ánh chính xác những gì đã tồn tại. Xem
+> **"Cấu trúc thư mục hiện tại (thực tế)"** trong mục "Trạng thái triển khai" ở cuối file
+> để biết chính xác file nào đang có.
+
 ```
 src/
  │
@@ -158,6 +196,7 @@ employees
   name
   store_id
   position
+  role          -- staff | manager | admin, xem mục 7 (Permission)
   status
   ...
 ```
@@ -495,6 +534,68 @@ Telegram, Slack vẫn dùng lại được job này mà không sửa gì.
 
 Cập nhật thủ công mỗi khi có thay đổi lớn, để file này luôn phản ánh đúng những gì đã làm.
 
+### Cấu trúc thư mục hiện tại (thực tế)
+
+```
+src/
+├── core/
+│   ├── employee/
+│   │   ├── employee.entity.ts
+│   │   ├── employee.repository.ts     (port/interface)
+│   │   └── employee-role.ts           (staff < manager < admin, hasAtLeastRole)
+│   ├── product/
+│   │   ├── product.entity.ts
+│   │   └── product.repository.ts      (port/interface)
+│   ├── inventory/
+│   │   ├── inventory-transaction.entity.ts
+│   │   └── inventory.repository.ts    (port/interface)
+│   └── audit/
+│       ├── audit-log.entity.ts
+│       └── audit-log.repository.ts    (port/interface)
+│
+├── application/
+│   ├── employee/
+│   │   └── resolve-employee-by-provider.ts
+│   └── inventory/
+│       ├── types.ts
+│       ├── parse-inventory-input.ts
+│       ├── validate-inventory-input.ts
+│       ├── preview-inventory-update.ts
+│       ├── confirm-inventory-update.ts
+│       └── check-inventory-stock.ts
+│
+├── adapters/
+│   └── discord/
+│       ├── bot.ts                     (đăng ký lệnh + router sự kiện — điểm cắm mọi command mới)
+│       ├── dependencies.ts
+│       ├── authorize.ts               (resolveAuthorizedEmployee — mọi handler gọi hàm này đầu tiên)
+│       ├── inventory-session-store.ts (preview tạm trong RAM, chờ Confirm)
+│       ├── render-inventory-preview.ts
+│       ├── render-inventory-check.ts
+│       ├── commands/
+│       │   ├── inventory-command.ts        (/inventory-update)
+│       │   └── inventory-check-command.ts  (/inventory-check)
+│       └── interactions/
+│           ├── inventory-modal-submit.ts
+│           └── inventory-confirm-button.ts
+│   (adapters/telegram, adapters/slack — CHƯA tạo, Phase 6)
+│
+├── infrastructure/
+│   ├── config/env.ts                  (Zod validate biến môi trường)
+│   └── postgres/
+│       ├── client.ts
+│       ├── schema/                    (employees, external-accounts, products,
+│       │                               inventory-transactions, audit-logs)
+│       └── repositories/              (implement các port ở core/)
+│
+├── api/                                (RỖNG — chưa có REST API, xem "Chưa có" bên dưới)
+└── index.ts                            (điểm khởi động DUY NHẤT — xem "Bắt đầu nhanh" ở đầu file)
+
+scripts/
+├── migrate.ts
+└── seed.ts
+```
+
 ### Đã có (Milestone 1) — đã test end-to-end thành công 08/2026
 
 - Cấu trúc code hexagonal: `src/core`, `src/application`, `src/adapters/discord`,
@@ -518,11 +619,20 @@ Cập nhật thủ công mỗi khi có thay đổi lớn, để file này luôn 
   `/inventory-check` hiện để mức tối thiểu `staff` (mở cho tất cả) — đổi 1 dòng hằng số
   `xxxCommandRequiredRole` trong file command tương ứng nếu muốn giới hạn lại. Employee
   mẫu EMP001 (map với Discord của bạn) được seed sẵn role `admin`.
+- Audit log (08/2026): bảng `audit_logs` (`employee_id`, `action`, `entity_type`,
+  `entity_id`, `payload` jsonb, `source`, `created_at`) — hoàn thiện bước cuối sơ đồ
+  permission ở mục 7. Port `AuditLogRepository` (`core/audit/`), implementation ở
+  `infrastructure/postgres/repositories/audit-log.repository.ts`. Hiện chỉ có 1 điểm ghi:
+  `confirmInventoryUpdate` (`application/inventory/confirm-inventory-update.ts`) ghi
+  1 dòng `INVENTORY_UPDATE_CONFIRMED` ngay sau khi transaction được lưu, kèm
+  `transactionIds` + danh sách dòng đã confirm trong `payload`. Ghi audit log là best-effort
+  nối tiếp sau (không bọc chung DB transaction với insert `inventory_transactions`) — ưu
+  tiên giữ đơn giản (mục 22.1) hơn là atomicity tuyệt đối ở giai đoạn MVP này. Chưa có điểm
+  ghi audit log nào khác (chưa dùng cho employee role change, v.v.) — thêm dần khi các
+  action quan trọng khác xuất hiện.
 
 ### Chưa có (việc tiếp theo)
 
-- Audit log (`audit_logs` table) — bước cuối trong sơ đồ permission ở mục 7 vẫn thiếu, nên
-  hiện chưa ghi lại "ai làm gì, lúc nào" một cách có cấu trúc.
 - Inventory reorder alert / background job (mục 24 ở trên) — cần thêm `lead_time_days`,
   `reorder_point` vào schema `products` trước.
 - REST API (`src/api` đang để trống).

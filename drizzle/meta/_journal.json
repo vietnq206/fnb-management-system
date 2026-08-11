@@ -15,6 +15,13 @@
       "when": 1786379759155,
       "tag": "0001_shocking_tarot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786461124434,
+      "tag": "0002_fixed_havok",
+      "breakpoints": true
     }
   ]
 }
